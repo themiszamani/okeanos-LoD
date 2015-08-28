@@ -4,9 +4,9 @@ from django.http import JsonResponse
 
 from fokia.utils import check_auth_token
 
-import .tasks
-import .events
-from .models import LambdaInstance
+import tasks
+import events
+from .models import LambdaInstance, Server
 
 
 def authenticate(request):
@@ -17,7 +17,7 @@ def authenticate(request):
     # request.META contains all the headers of the request
     auth_token = request.META.get("HTTP_X_API_KEY")
     auth_url = request.META.get("HTTP_X_AUTH_URL")
-    print auth_token, auth_url
+
     status, info = check_auth_token(auth_token, auth_url=auth_url)
     if status:
         return JsonResponse({"result": "Success"}, status=200)
@@ -122,18 +122,32 @@ def lambda_instance_start(request, instance_uuid):
     Starts a specific lambda instance owned by the user.
     """
 
+    # Authenticate user.
+    authentication_response = authenticate(request)
+    if authentication_response.status_code != 200:
+        return authentication_response
+
     # Check if the specified lambda instance exists.
     if not LambdaInstance.objects.get(uuid=instance_uuid).exists():
         return JsonResponse({"errors": [{"message": "Lambda instance not found",
                                          "code": 404,
                                          "details": ""}]}, status=404)
 
+    instance_servers = Server.objects.filter(lambda_instance =
+                                    LambdaInstance.objects.get(uuid=instance_uuid))
+    master_id = instance_servers.exclude(pub_ip=None).values('id')
+    slave_ids = instance_servers.filter(pub_ip=None).values('id')
+
     # Create task to start the lambda instance.
     auth_token = request.META.get("HTTP_X_API_KEY")
-    tasks.lambda_instance_start(token, instance_uuid).delay()
+    auth_url = request.META.get("HTTP_X_AUTH_URL")
+    if not auth_url:
+        auth_url = "https://accounts.okeanos.grnet.gr/identity/v2.0"
+
+    tasks.lambda_instance_start(instance_uuid, auth_url, auth_token, master_id, slave_ids).delay()
 
     # Create event to update the database.
-    events.set_lambda_instance_status(uuid, LambdaInstance.STARTING).delay()
+    events.set_lambda_instance_status(instance_uuid, LambdaInstance.STARTING).delay()
 
     return JsonResponse({"result": "Success"}, status=200)
 
@@ -143,18 +157,31 @@ def lambda_instance_stop(request, instance_uuid):
     Stops a specific lambda instance owned by the user.
     """
 
+    # Authenticate user.
+    authentication_response = authenticate(request)
+    if authentication_response.status_code != 200:
+        return authentication_response
+
     # Check if the specified lambda instance exists.
     if not LambdaInstance.objects.get(uuid=instance_uuid).exists():
         return JsonResponse({"errors": [{"message": "Lambda instance not found",
                                          "code": 404,
                                          "details": ""}]}, status=404)
 
- 
+    instance_servers = Server.objects.filter(lambda_instance =
+                                    LambdaInstance.objects.get(uuid=instance_uuid))
+    master_id = instance_servers.exclude(pub_ip=None).values('id')
+    slave_ids = instance_servers.filter(pub_ip=None).values('id')
+
     # Create task to stop the lambda instance.
     auth_token = request.META.get("HTTP_X_API_KEY")
-    tasks.lambda_instance_stop(token, instance_uuid).delay()
+    auth_url = request.META.get("HTTP_X_AUTH_URL")
+    if not auth_url:
+        auth_url = "https://accounts.okeanos.grnet.gr/identity/v2.0"
+
+    tasks.lambda_instance_stop(instance_uuid, auth_url, auth_token, master_id, slave_ids).delay()
 
     # Create event to update the database.
-    events.set_lambda_instance_status(uuid, LambdaInstance.STOPPING).delay()
+    events.set_lambda_instance_status(instance_uuid, LambdaInstance.STOPPING).delay()
 
     return JsonResponse({"result": "Success"}, status=200)
