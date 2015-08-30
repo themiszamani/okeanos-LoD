@@ -113,6 +113,7 @@ def lambda_instance_status(request, instance_uuid):
     return JsonResponse({"data": {"name": database_instance.name,
                                   "status": LambdaInstance.
                                   status_choices[int(database_instance.status)][1],
+                                  "failure_message": database_instance.failure_message,
                                   "uuid": database_instance.uuid,
                                   "id": database_instance.id}}, status=200)
 
