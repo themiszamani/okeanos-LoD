@@ -1,2 +1,2 @@
 # okeanos-LoD
-~okeanos Lambda on Demand project.
+~okeanos Lambda on Demand project..
