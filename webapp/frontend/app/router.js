@@ -15,6 +15,7 @@ Router.map(function() {
     // /user/clusters
     this.route('clusters');
 	});
+  this.route('create-lambda-instance');
 });
 
 export default Router;
